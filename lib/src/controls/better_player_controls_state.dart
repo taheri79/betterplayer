@@ -489,7 +489,7 @@ abstract class BetterPlayerControlsState<T extends StatefulWidget>
           betterPlayerController?.betterPlayerConfiguration.useRootNavigator ??
               false,
       builder: (context) {
-        return SafeArea(
+        return Directionality(textDirection: TextDirection.rtl, child: SafeArea(
           top: false,
           child: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
@@ -506,7 +506,7 @@ abstract class BetterPlayerControlsState<T extends StatefulWidget>
               ),
             ),
           ),
-        );
+        ));
       },
     );
   }

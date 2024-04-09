@@ -33,6 +33,7 @@ class VideoPlayerValue {
     this.speed = 1.0,
     this.errorDescription,
     this.isPip = false,
+    this.isAd = false,
   });
 
   /// Returns an instance with a `null` [Duration].
@@ -87,6 +88,9 @@ class VideoPlayerValue {
   ///Is in Picture in Picture Mode
   final bool isPip;
 
+  ///Is Playing Ad
+  final bool isAd;
+
   /// Indicates whether or not the video has been loaded and is ready to play.
   bool get initialized => duration != null;
 
@@ -122,6 +126,7 @@ class VideoPlayerValue {
     String? errorDescription,
     double? speed,
     bool? isPip,
+    bool? isAd,
   }) {
     return VideoPlayerValue(
       duration: duration ?? this.duration,
@@ -136,6 +141,7 @@ class VideoPlayerValue {
       speed: speed ?? this.speed,
       errorDescription: errorDescription ?? this.errorDescription,
       isPip: isPip ?? this.isPip,
+      isAd: isAd ?? this.isAd,
     );
   }
 
@@ -213,12 +219,24 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
       }
       videoEventStreamController.add(event);
       switch (event.eventType) {
+        case VideoEventType.adStarted:
+          value = value.copyWith(
+            isAd: true
+          );
+          break;
+        case VideoEventType.adFinish:
+          value = value.copyWith(
+            isAd: false
+          );
+          break;
         case VideoEventType.initialized:
           value = value.copyWith(
             duration: event.duration,
             size: event.size,
           );
-          _initializingCompleter.complete(null);
+          if(!_initializingCompleter.isCompleted){
+            _initializingCompleter.complete(null);
+          }
           _applyPlayPause();
           break;
         case VideoEventType.completed:
@@ -489,6 +507,12 @@ class VideoPlayerController extends ValueNotifier<VideoPlayerValue> {
     }
   }
 
+  Future<void> skipAd() async {
+    if (!_created || _isDisposed) {
+      return;
+    }
+    await _videoPlayerPlatform.skipAd(_textureId);
+  }
   Future<void> _applyVolume() async {
     if (!_created || _isDisposed) {
       return;

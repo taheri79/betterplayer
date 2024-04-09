@@ -68,6 +68,17 @@ import java.lang.IllegalStateException
 import java.util.*
 import kotlin.math.max
 import kotlin.math.min
+import com.google.android.exoplayer2.ext.ima.ImaAdsLoader
+import com.google.android.exoplayer2.MediaItem.AdsConfiguration
+import com.google.android.exoplayer2.source.ads.AdPlaybackState
+import com.google.android.exoplayer2.source.ads.AdsLoader
+import com.google.android.exoplayer2.source.DefaultMediaSourceFactory
+import com.google.android.exoplayer2.source.MediaSourceFactory
+import com.google.android.exoplayer2.ui.PlayerView
+import android.view.*
+import com.google.ads.interactivemedia.v3.api.AdEvent
+import com.google.ads.interactivemedia.v3.api.UiElement
+import com.google.android.exoplayer2.ui.AdViewProvider
 
 internal class BetterPlayer(
     context: Context,
@@ -95,6 +106,10 @@ internal class BetterPlayer(
     private val customDefaultLoadControl: CustomDefaultLoadControl =
         customDefaultLoadControl ?: CustomDefaultLoadControl()
     private var lastSendBufferedPosition = 0L
+    private var playerView: PlayerView
+    var adsLoader: ImaAdsLoader? = null
+    private var eventListener: AdsLoader.EventListener? = null
+    private var adPlayed = false
 
     init {
         val loadBuilder = DefaultLoadControl.Builder()
@@ -105,10 +120,52 @@ internal class BetterPlayer(
             this.customDefaultLoadControl.bufferForPlaybackAfterRebufferMs
         )
         loadControl = loadBuilder.build()
+        playerView = PlayerView(context)
+        adsLoader = ImaAdsLoader.Builder( /* context= */context)
+//            .setDebugModeEnabled(true)
+            .setAdErrorListener { event ->
+                println(event.toString())
+            }
+            .setAdEventListener { event ->
+
+                if (event.type == AdEvent.AdEventType.STARTED) {
+                    adPlayed = true
+                    println(event.ad)
+                    val event: MutableMap<String, Any> = HashMap()
+                    event["event"] = "adStarted"
+                    eventSink.success(event)
+//                    event.ad.surveyUrl
+//                    adsLoader?.skipAd();
+                }
+                if (event.type == AdEvent.AdEventType.SKIPPED) {
+                    val event: MutableMap<String, Any> = HashMap()
+                    event["event"] = "adFinish"
+                    eventSink.success(event)
+                    sendInitialized()
+                }
+                if (event.type == AdEvent.AdEventType.COMPLETED) {
+                    val event: MutableMap<String, Any> = HashMap()
+                    event["event"] = "adFinish"
+                    eventSink.success(event)
+                    sendInitialized()
+                }
+//                println(event.toString())
+
+            }
+            .build()
+
+        val dataSourceFactory: DataSource.Factory = DefaultDataSourceFactory(context)
+        val mediaSourceFactory: MediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+            .setAdsLoaderProvider { unusedAdTagUri: AdsConfiguration? -> adsLoader }
+            .setAdViewProvider(playerView)
+
         exoPlayer = ExoPlayer.Builder(context)
+            .setMediaSourceFactory(mediaSourceFactory)
             .setTrackSelector(trackSelector)
             .setLoadControl(loadControl)
             .build()
+        playerView.setPlayer(exoPlayer);
+        adsLoader!!.setPlayer(exoPlayer)
         workManager = WorkManager.getInstance(context)
         workerObserverMap = HashMap()
         setupVideoPlayer(eventChannel, textureEntry, result)
@@ -193,15 +250,43 @@ internal class BetterPlayer(
         } else {
             dataSourceFactory = DefaultDataSource.Factory(context)
         }
-        val mediaSource = buildMediaSource(uri, dataSourceFactory, formatHint, cacheKey, context)
-        if (overriddenDuration != 0L) {
-            val clippingMediaSource = ClippingMediaSource(mediaSource, 0, overriddenDuration * 1000)
-            exoPlayer?.setMediaSource(clippingMediaSource)
+
+        if (overriddenDuration == 0L && !adPlayed) {
+            val mediaItemBuilder = MediaItem.Builder()
+            mediaItemBuilder.setUri(uri)
+
+            val adTagUri = Uri.parse("https://vfetch.yektanet.com/api/v1/load/1e821bb2-6184-4422-9610-0daaef50dc1e")
+//            val adTagUri = Uri.parse("https://pubads.g.doubleclick.net/gampad/ads?iu=/21775744923/external/single_preroll_skippable&sz=640x480&ciu_szs=300x250%2C728x90&gdfp_req=1&output=vast&unviewed_position_start=1&env=vp&impl=s&correlator=")
+            var adPlaybackState = AdPlaybackState(0, 500 * C.MICROS_PER_SECOND)
+            adPlaybackState = adPlaybackState.withAdUri(0, 0, adTagUri)
+
+            eventListener?.onAdPlaybackState(adPlaybackState);
+
+            mediaItemBuilder.setAdsConfiguration(
+                AdsConfiguration.Builder(adTagUri).build()
+            )
+            if (cacheKey != null && cacheKey.isNotEmpty()) {
+                mediaItemBuilder.setCustomCacheKey(cacheKey)
+            }
+            val mediaItem = mediaItemBuilder.build()
+            exoPlayer?.addMediaItem(mediaItem)
+            exoPlayer?.prepare()
+            result.success(null)
         } else {
-            exoPlayer?.setMediaSource(mediaSource)
+            val mediaSource =
+                buildMediaSource(uri, dataSourceFactory, formatHint, cacheKey, context)
+            if (overriddenDuration != 0L) {
+                val clippingMediaSource =
+                    ClippingMediaSource(mediaSource, 0, overriddenDuration * 1000)
+                exoPlayer?.setMediaSource(clippingMediaSource)
+            } else {
+                exoPlayer?.setMediaSource(mediaSource)
+            }
+            exoPlayer?.prepare()
+            result.success(null)
         }
-        exoPlayer?.prepare()
-        result.success(null)
+
+
     }
 
     fun setupPlayerNotification(
@@ -399,6 +484,16 @@ internal class BetterPlayer(
         }
         val mediaItemBuilder = MediaItem.Builder()
         mediaItemBuilder.setUri(uri)
+
+        val adTagUri = Uri.parse("https://pubads.g.doubleclick.net/gampad/ads?iu=/21775744923/external/omid_ad_samples&env=vp&gdfp_req=1&output=vast&sz=640x480&description_url=http%3A%2F%2Ftest_site.com%2Fhomepage&vpmute=0&vpa=0&vad_format=linear&url=http%3A%2F%2Ftest_site.com&vpos=preroll&unviewed_position_start=1&correlator=")
+        var adPlaybackState = AdPlaybackState(0, 500 * C.MICROS_PER_SECOND)
+        adPlaybackState = adPlaybackState.withAdUri(0, 0, adTagUri)
+
+        eventListener?.onAdPlaybackState(adPlaybackState);
+
+        mediaItemBuilder.setAdsConfiguration(
+            AdsConfiguration.Builder(adTagUri).build()
+        )
         if (cacheKey != null && cacheKey.isNotEmpty()) {
             mediaItemBuilder.setCustomCacheKey(cacheKey)
         }
@@ -414,21 +509,25 @@ internal class BetterPlayer(
             )
                 .setDrmSessionManagerProvider(drmSessionManagerProvider)
                 .createMediaSource(mediaItem)
+
             C.TYPE_DASH -> DashMediaSource.Factory(
                 DefaultDashChunkSource.Factory(mediaDataSourceFactory),
                 DefaultDataSource.Factory(context, mediaDataSourceFactory)
             )
                 .setDrmSessionManagerProvider(drmSessionManagerProvider)
                 .createMediaSource(mediaItem)
+
             C.TYPE_HLS -> HlsMediaSource.Factory(mediaDataSourceFactory)
                 .setDrmSessionManagerProvider(drmSessionManagerProvider)
                 .createMediaSource(mediaItem)
+
             C.TYPE_OTHER -> ProgressiveMediaSource.Factory(
                 mediaDataSourceFactory,
                 DefaultExtractorsFactory()
             )
                 .setDrmSessionManagerProvider(drmSessionManagerProvider)
                 .createMediaSource(mediaItem)
+
             else -> {
                 throw IllegalStateException("Unsupported type: $type")
             }
@@ -460,6 +559,7 @@ internal class BetterPlayer(
                         event["event"] = "bufferingStart"
                         eventSink.success(event)
                     }
+
                     Player.STATE_READY -> {
                         if (!isInitialized) {
                             isInitialized = true
@@ -469,12 +569,14 @@ internal class BetterPlayer(
                         event["event"] = "bufferingEnd"
                         eventSink.success(event)
                     }
+
                     Player.STATE_ENDED -> {
                         val event: MutableMap<String, Any?> = HashMap()
                         event["event"] = "completed"
                         event["key"] = key
                         eventSink.success(event)
                     }
+
                     Player.STATE_IDLE -> {
                         //no-op
                     }
@@ -742,6 +844,8 @@ internal class BetterPlayer(
         textureEntry.release()
         eventChannel.setStreamHandler(null)
         surface?.release()
+        adsLoader!!.setPlayer(null)
+        playerView.player = null
         exoPlayer?.release()
     }
 

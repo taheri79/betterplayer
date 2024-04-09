@@ -100,6 +100,10 @@ abstract class VideoPlayerPlatform {
   Future<void> play(int? textureId) {
     throw UnimplementedError('play() has not been implemented.');
   }
+  /// Skip Ad.
+  Future<void> skipAd(int? textureId) {
+    throw UnimplementedError('skipAd() has not been implemented.');
+  }
 
   /// Stops the video playback.
   Future<void> pause(int? textureId) {
@@ -432,6 +436,8 @@ class VideoEvent {
 /// Emitted by the platform implementation when the video is initialized or
 /// completed or to communicate buffering events.
 enum VideoEventType {
+  adStarted,
+  adFinish,
   /// The video has been initialized.
   initialized,
 

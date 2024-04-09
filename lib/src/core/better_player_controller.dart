@@ -102,15 +102,26 @@ class BetterPlayerController {
 
   ///Timer for next video. Used in playlist.
   Timer? _nextVideoTimer;
+  ///Timer for skip Ad.
+  Timer? _skipAdTimer;
 
   ///Time for next video.
   int? _nextVideoTime;
+
+  ///Time for Skip Ad.
+  int? _skipAdTime;
 
   ///Stream controller which emits next video time.
   final StreamController<int?> _nextVideoTimeStreamController =
       StreamController.broadcast();
 
+  ///Stream controller which emits skip ad time.
+  final StreamController<int?> _skipAdTimeStreamController =
+      StreamController.broadcast();
+
   Stream<int?> get nextVideoTimeStream => _nextVideoTimeStreamController.stream;
+
+  Stream<int?> get skipAdTimeStream => _skipAdTimeStreamController.stream;
 
   ///Has player been disposed.
   bool _disposed = false;
@@ -763,6 +774,15 @@ class BetterPlayerController {
         videoPlayerController?.value ??
             VideoPlayerValue(duration: const Duration());
 
+
+    if(currentVideoPlayerValue.isAd){
+      setControlsEnabled(false);
+      startSkipAdTimer(5);
+    }else{
+      setControlsEnabled(true);
+      _skipAdTimeStreamController.add(null);
+    }
+
     if (currentVideoPlayerValue.hasError) {
       _videoPlayerValueOnError ??= currentVideoPlayerValue;
       _postEvent(
@@ -873,6 +893,29 @@ class BetterPlayerController {
     }
   }
 
+  void startSkipAdTimer(int seconds) {
+    if (_skipAdTimer == null && _skipAdTime == null) {
+      _skipAdTime = seconds;
+      _skipAdTimeStreamController.add(_skipAdTime);
+      if (_skipAdTime == 0) {
+        return;
+      }
+
+      _skipAdTimer =
+          Timer.periodic(const Duration(milliseconds: 1000), (_timer) async {
+        if (_skipAdTime == 1) {
+          _timer.cancel();
+          _skipAdTimer = null;
+          SkipAd();
+        }
+        if (_skipAdTime != null) {
+          _skipAdTime = _skipAdTime! - 1;
+        }
+        _skipAdTimeStreamController.add(_skipAdTime);
+      });
+    }
+  }
+
   ///Cancel next video timer. Used in playlist. Do not use manually.
   void cancelNextVideoTimer() {
     _nextVideoTime = null;
@@ -887,6 +930,13 @@ class BetterPlayerController {
     _nextVideoTimeStreamController.add(_nextVideoTime);
     _postEvent(BetterPlayerEvent(BetterPlayerEventType.changedPlaylistItem));
     cancelNextVideoTimer();
+  }
+  ///Skip ad.
+  void SkipAd() {
+    _skipAdTimer?.cancel();
+    _skipAdTimer = null;
+    _skipAdTimeStreamController.add(null);
+    videoPlayerController?.skipAd();
   }
 
   ///Setup track parameters for currently played video. Can be only used for HLS or DASH

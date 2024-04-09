@@ -32,8 +32,14 @@ apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
 
 android {
-    namespace 'com.jhomlala.better_player'
+//    namespace 'com.jhomlala.better_player'
     compileSdkVersion 31
+    buildToolsVersion "31.0.0"
+
+    defaultConfig {
+        minSdkVersion 16
+        targetSdkVersion 31
+    }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
@@ -48,10 +54,6 @@ android {
         main.java.srcDirs += 'src/main/kotlin'
     }
 
-    defaultConfig {
-        minSdkVersion 16
-    }
-
     dependencies {
         implementation "com.google.android.exoplayer:exoplayer-core:$exoPlayerVersion"
         implementation "com.google.android.exoplayer:exoplayer-hls:$exoPlayerVersion"
@@ -59,14 +61,17 @@ android {
         implementation "com.google.android.exoplayer:exoplayer-smoothstreaming:$exoPlayerVersion"
         implementation "com.google.android.exoplayer:exoplayer-ui:$exoPlayerVersion"
         implementation "com.google.android.exoplayer:extension-mediasession:$exoPlayerVersion"
+
+        // The library adds the IMA ExoPlayer integration for ads.
+        implementation "com.google.android.exoplayer:extension-ima:$exoPlayerVersion"
+
         implementation "androidx.lifecycle:lifecycle-runtime-ktx:$lifecycleVersion"
         implementation "androidx.lifecycle:lifecycle-common:$lifecycleVersion"
         implementation "androidx.lifecycle:lifecycle-common-java8:$lifecycleVersion"
         implementation "androidx.annotation:annotation:$annotationVersion"
         implementation "androidx.work:work-runtime:$workVersion"
-    }
-}
 
-dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlinVersion"
+        // Kotlin Standard Library
+        implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion"
+    }
 }

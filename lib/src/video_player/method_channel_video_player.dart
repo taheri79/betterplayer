@@ -153,6 +153,14 @@ class MethodChannelVideoPlayer extends VideoPlayerPlatform {
   }
 
   @override
+  Future<void> skipAd(int? textureId) {
+    return _channel.invokeMethod<void>(
+      'skipAd',
+      <String, dynamic>{'textureId': textureId},
+    );
+  }
+
+  @override
   Future<void> setVolume(int? textureId, double volume) {
     return _channel.invokeMethod<void>(
       'setVolume',
@@ -329,6 +337,17 @@ class MethodChannelVideoPlayer extends VideoPlayerPlatform {
       final String? eventType = map["event"] as String?;
       final String? key = map["key"] as String?;
       switch (eventType) {
+        case 'adStarted':
+          return VideoEvent(
+            eventType: VideoEventType.adStarted,
+            key: key,
+            // duration: Duration(milliseconds: map['duration'] as int),
+          );
+          case 'adFinish':
+          return VideoEvent(
+            eventType: VideoEventType.adFinish,
+            key: key,
+          );
         case 'initialized':
           double width = 0;
           double height = 0;
